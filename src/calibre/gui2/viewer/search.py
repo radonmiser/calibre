@@ -224,24 +224,21 @@ class SearchResult:
 @lru_cache(maxsize=None)
 def searchable_text_for_name(name):
     ans = []
-    add_text = ans.append
     serialized_data = json.loads(get_data(name)[0])
     stack = []
-    a = stack.append
     removed_tails = []
-    no_visit = frozenset({'script', 'style', 'title', 'head'})
-    ignore_text = frozenset({'img', 'math', 'rt', 'rp', 'rtc'})
     for child in serialized_data['tree']['c']:
         if child.get('n') == 'body':
-            a((child, False))
+            stack.append(child)
             # the JS code does not add the tail of body tags to flat text
             removed_tails.append((child.pop('l', None), child))
+    ignore_text = {'script', 'style', 'title'}
     text_pos = 0
     anchor_offset_map = OrderedDict()
     while stack:
-        node, text_ignored_in_parent = stack.pop()
+        node = stack.pop()
         if isinstance(node, str):
-            add_text(node)
+            ans.append(node)
             text_pos += len(node)
             continue
         g = node.get
@@ -256,18 +253,13 @@ def searchable_text_for_name(name):
                     aid = x[1]
                     if aid not in anchor_offset_map:
                         anchor_offset_map[aid] = text_pos
-        if name in no_visit:
-            continue
-        ignore_text_in_node_and_children = text_ignored_in_parent or name in ignore_text
-
-        if text and not ignore_text_in_node_and_children:
-            add_text(text)
+        if name and text and name not in ignore_text:
+            ans.append(text)
             text_pos += len(text)
-        if tail and not text_ignored_in_parent:
-            a((tail, ignore_text_in_node_and_children))
+        if tail:
+            stack.append(tail)
         if children:
-            for child in reversed(children):
-                a((child, ignore_text_in_node_and_children))
+            stack.extend(reversed(children))
     for (tail, body) in removed_tails:
         if tail is not None:
             body['l'] = tail
