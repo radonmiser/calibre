@@ -283,7 +283,7 @@ class View:
             entry_point = 'read_book.iframe'
         iframe_kw = {
             'id': iframe_id, 'seamless': True,
-            'sandbox': '',
+            'sandbox': 'allow-popups allow-scripts allow-popups-to-escape-sandbox',
             'style': 'flex-grow: 2', 'allowfullscreen': 'true',
         }
         iframe, self.iframe_wrapper = create_wrapped_iframe(handlers, _('Bootstrapping book reader...'), entry_point, iframe_kw)
