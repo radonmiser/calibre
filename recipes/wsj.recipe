@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# vim:fileencoding=utf-8
 import json
 import time
 from datetime import datetime, timedelta
@@ -6,14 +8,10 @@ from itertools import zip_longest
 from calibre.ebooks.BeautifulSoup import BeautifulSoup
 from calibre.web.feeds.news import BasicNewsRecipe, classes
 
-# Past 6 editions are available for download.
-# For available past editions see log and set date to, for example, '20240513'.
-past_edition = None
-
 
 def media_bucket(x):
     if x.get('type', '') == 'image':
-        if x.get('subtype', '') == 'graphic':
+        if x.get('subtype', '') == 'graphic' or 'images.wsj.net' not in x['manifest-url']:
             return '<br><img src="{}"><div class="figc">{}</div>\n'.format(
                 x['manifest-url'], x['caption'] + '<i> ' + x['credit'] + '</i>'
             )
@@ -40,6 +38,13 @@ class WSJ(BasicNewsRecipe):
     no_stylesheets = True
     remove_attributes = ['style', 'height', 'width']
     resolve_internal_links = True
+
+    recipe_specific_options = {
+        'date': {
+            'short': 'The date of the edition to download (YYYYMMDD format)\nOnly the past 6 editions will be available ',
+            'long': 'For example, 20240513'
+        }
+    }
 
     extra_css = '''
         #subhed, em { font-style:italic; color:#202020; }
@@ -82,6 +87,7 @@ class WSJ(BasicNewsRecipe):
             byl.insert(0, read)
         url = soup.find('p', attrs={'id':'share-link'})
         if url:
+            url.name = 'div'
             url['title'] = self.tag_to_string(url).strip()
             url.string = ''
         panel = soup.find('panel', attrs={'id':'metadata'})
@@ -97,8 +103,14 @@ class WSJ(BasicNewsRecipe):
                         x.insert_after(BeautifulSoup(y, 'html.parser'))
         return soup
 
-    if not past_edition:
-        def _download_cover(self):
+    def postprocess_html(self, soup, first_fetch):
+        for pan in soup.findAll('panel'):
+            pan.name = 'div'
+        return soup
+
+    def _download_cover(self):
+        d = self.recipe_specific_options.get('date')
+        if not (d and isinstance(d, str)):
             import os
             from contextlib import closing
 
@@ -130,8 +142,11 @@ class WSJ(BasicNewsRecipe):
         catalog = json.loads(self.index_to_soup(index + '/catalogs/v1/wsj/us/catalog.json', raw=True))
         edit = [itm['key'][10:] for itm in catalog['items'] if itm['type'] == 'ITPNEXTGEN'][1:]
         self.log('**Past Editions available :', ', '.join(edit))
+
+        past_edition = self.recipe_specific_options.get('date')
+
         for itm in catalog['items']:
-            if past_edition:
+            if past_edition and isinstance(past_edition, str):
                 if itm['key'] == 'ITPNEXTGEN' + past_edition:
                     key = itm['key']
                     manifest = itm['manifest']
@@ -156,7 +171,7 @@ class WSJ(BasicNewsRecipe):
                 if '-pages_' in k:
                     section = k.split('-pages_')[0].replace('_', ' ')
                     if 'MAGAZINE' in section:
-                        if not dt.strftime('%d') == 1:
+                        if not dt.day == 1:
                             continue
                         self.log('Loading Magazine section')
                     self.log(section)
@@ -178,6 +193,6 @@ class WSJ(BasicNewsRecipe):
         return BeautifulSoup(raw).prettify()
 
     def populate_article_metadata(self, article, soup, first):
-        lnk = soup.find('p', attrs={'id':'share-link'})
+        lnk = soup.find('div', attrs={'id':'share-link'})
         if lnk:
             article.url = lnk['title']

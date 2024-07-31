@@ -23,6 +23,123 @@
 # - title by author
 # }}}
 
+{{{ 7.16.0 2024-07-31
+
+:: new features
+
+- Add a driver for the new 2024 Tolino devices. They use a modified version of the Kobo firmware, so they are detected as Kobo devices.
+
+- Various news recipes now have the ability to download past issues, accessible via the Advanced tab in the Schedule news dialog
+
+:: bug fixes
+
+- [major 2075128] ONLY if you use the calibre Content server, you should update calibre as soon as possible
+
+  If you do not know what the Content server is, you do not use it, and
+  these do not apply to you. If you have set a password to access the
+  Content server that you have not shared with anyone, these do not
+  affect you.
+
+  A remote code execution bug in the Content server introduced in
+  calibre version 6.9.0 (released on 2022-11-25) means that anyone with
+  access to the server also has access to the rest of the computer the
+  server is running on. If you are using a password to protect access to
+  the server only people that know the password can gain access via the
+  bug. Thanks to STAR Labs (https://starlabs.sg) for finding these
+  vulnerabilities.
+
+- [2075125] Content server: Fix path traversal vulnerability
+
+  A bug in a feature introduced in calibre version 6.16.0 (released
+  2023-04-20) means anyone with access to the server can also read non
+  calibre related files on the computer running the server.
+
+- [2075131] Content server: Fix SQL injection vulnerability
+
+  A bug in a feature introduced in calibre version 6.10.0 (released
+  2022-12-16) means anyone with access to the server can also read
+  non-calibre SQLITE database files on the computer running the server.
+
+- [2075130] Content server: Fix an XSS vulnerability in one endpoint
+
+  Only relevant if you embed the calibre server within a larger server, it means
+  attackers who can convince users to click on a specially crafted link, can run
+  JavaScript code with the same origin as the larger server calibre is embedded in.
+
+- [2073972] Content server: Fix an error when opening the downloaded books page directly via a link and using a custom book list template
+
+- macOS: Fix opening multiple books from Finder with the editor only opening one of the books
+
+- Fix the legacy LRF format viewer not starting
+
+- [2074147] Fix mouse wheel not transitioning from undefined date to current date in date entry controls
+
+:: improved recipes
+- Harvard Business Review
+- Live Mint
+- Business Standard
+- Pagina12
+- Bloomberg
+
+}}}
+
+{{{ 7.15.0 2024-07-19
+
+:: new features
+
+- Fetch news: Allow individual news sources to specify source specific options such as downloading of past editions
+
+:: bug fixes
+
+- [2073323] Windows: MTP driver: Fix a regression in the previous release that caused an error with some devices
+
+- Icon theme creation dialog: Fix various issues when creating an icon theme with many icons that have light/dark variants
+
+:: improved recipes
+- Bloomberg
+- Eenadu
+- Mediapart
+
+:: new recipes
+- WSJ News by unkn0wn
+}}}
+
+{{{ 7.14.0 2024-07-12
+
+:: new features
+
+- [2072442] Book details: When dropping files add an option to add them to the book as data files
+
+- Edit book: A new action to toggle line wrapping mode in all code editors. Can be assigned via Preferences->Keyboard shortcuts->Global actions or added to the toolbar via Preferences->Toolbars->Book wide actions
+
+- Kobo driver: Add an option to force the SeriesID for all books in a series to have the same value
+
+:: bug fixes
+
+- [2071458] Fix a regression in the previous release that broke merging of books when the confirmation for the merge was disabled
+
+- [2072412] E-book viewer: Allow some header and footer items such as progress to overflow instead of being truncated
+
+- [2072405] HTMLZ output: Make renaming of image files happen in filename order
+
+- [2072384] MTP driver: Fix infinite loop when connecting to some devices with more 65K objects in their filesystem
+
+- Fix shortcut editing widget when Qt is using a theme that inserts accelerators into push button labels automatically
+
+:: improved recipes
+- Instapaper
+- MIT Tech Review
+- Guardian
+- Liberation
+- The Times and Sunday Times
+- Bloomberg Businessweek
+- Times Literary Supplement
+
+:: new recipes
+- Ancient Egypt Magazine, Minerva Magazine, Military History Magazine and World Archaeology Magazine by unkn0wn
+
+}}}
+
 {{{ 7.13.0 2024-06-28
 
 :: new features
@@ -43,7 +160,7 @@
 
 - Amazon metadata: When filtering search engine results by title ignore words of the title that are purely punctuation
 
-- When matching books on a device to book in the library assume a match if the title and any one author match, dont require all authors to match
+- When matching books on a device to book in the library assume a match if the title and any one author match, don't require all authors to match
 
 - [2069553] Update Google Images cover download plugin for website changes
 
@@ -749,7 +866,7 @@
 
 - MTP driver: Ignore top level folders whose names start with a leading dot Also ignore AppleDouble files, top level system and fonts folders and sdr folders on Kindle devices
 
-- [2033074] FB2 Input: use the <p> tag for paragraphs that dont contain other block content
+- [2033074] FB2 Input: use the <p> tag for paragraphs that don't contain other block content
 
 - [2033118] E-book viewer: Fix clicking on the back/forward buttons not working in some situations
 

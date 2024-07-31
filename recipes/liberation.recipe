@@ -1,21 +1,30 @@
+#!/usr/bin/env python
+# vim:fileencoding=utf-8
 '''
 liberation.fr
 '''
 
-import json, base64, time, locale
-
-from mechanize import Request
+import base64
+import json
+import time
 from datetime import datetime, timedelta
-from urllib.parse import quote, urlparse, urlencode
+from urllib.parse import quote, urlencode, urlparse
 
 from calibre import browser
 from calibre.web.feeds.news import BasicNewsRecipe
+from mechanize import Request
 
 
 def resize(x):
     for k, v in x.items():
         if '_750' in k:
             return v
+
+m_fr = {
+    1: 'janvier', 2: 'février', 3: 'mars', 4: 'avril',
+    5: 'mai', 6: 'juin', 7: 'juillet', 8: 'août',
+    9: 'septembre', 10: 'octobre', 11: 'novembre', 12: 'décembre'
+}
 
 def json_to_html(raw):
     data = json.loads(raw)
@@ -24,9 +33,8 @@ def json_to_html(raw):
     sub = '<p class="desc">' + data['subheadlines']['basic'] + '</p>'
 
     auth = '<p class="auth">{}</p>\n'
-    locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
     dt = datetime.fromisoformat(data['last_updated_date'][:-1]) + timedelta(seconds=time.timezone)
-    dt = dt.strftime('%b %d, %Y, %H:%M')
+    dt = dt.strftime('%d ' + m_fr[dt.month] + ' %Y')
     a = [x['name'] for x in data['credits']['by']]
     if a:
         auth = auth.format(', '.join(a) + ' | ' + dt)
@@ -34,7 +42,7 @@ def json_to_html(raw):
         auth = auth.format(dt)
 
     lede = ''
-    if data['promo_items']['basic'].get('type', '') == 'image':  
+    if data['promo_items']['basic'].get('type', '') == 'image':
         lede = '<br><img src="{}"><div class="figc">{}</div>\n'.format(
             resize(data['promo_items']['basic']['resized_image_urls']),
             data['promo_items']['basic'].get('caption', '')
@@ -75,7 +83,7 @@ class Liberation(BasicNewsRecipe):
         'les mutations des sociétés et des cultures.'
     )
     language = 'fr'
-    oldest_article = 1
+    oldest_article = 1.15
     remove_empty_feeds = True
     articles_are_obfuscated = True
     ignore_duplicate_articles = {'title', 'url'}
@@ -87,6 +95,20 @@ class Liberation(BasicNewsRecipe):
         .figc { font-size:small; text-align:center; }
         blockquote { color:#202020; }
     '''
+
+    recipe_specific_options = {
+        'days': {
+            'short': 'Oldest article to download from this news source. In days ',
+            'long': 'For example, 0.5, gives you articles from the past 12 hours',
+            'default': str(oldest_article)
+        }
+    }
+
+    def __init__(self, *args, **kwargs):
+        BasicNewsRecipe.__init__(self, *args, **kwargs)
+        d = self.recipe_specific_options.get('days')
+        if d and isinstance(d, str):
+            self.oldest_article = float(d)
 
     feeds = [
         ('A la une', 'https://www.liberation.fr/arc/outboundfeeds/rss-all/collection/accueil-une/?outputType=xml'),
@@ -107,14 +129,14 @@ class Liberation(BasicNewsRecipe):
     ]
 
     def get_obfuscated_article(self, url):
-        slug = urlparse(url).path       
+        slug = urlparse(url).path
         br = browser()
         b64 = base64.b64decode(self.key)
         query = {
-            'website':'liberation',
-            'website_url':'{}'.format(slug),
-            'published':'true',
-            '_sourceInclude':'_id,content_restrictions.content_code,credits,promo_items.basic.caption,promo_items.basic.credits,promo_items.basic.url,promo_items.basic.height,promo_items.basic.width,promo_items.basic.resized_image_urls,promo_items.basic.last_updated_date,promo_items.lead_art.caption,promo_items.lead_art.credits,promo_items.lead_art.url,promo_items.lead_art.height,promo_items.lead_art.width,promo_items.lead_art.resized_image_urls,promo_items.lead_art.last_updated_date,source.additional_properties.legacy_url,content_elements,source.source_id,taxonomy.primary_section.additional_properties.original._admin.alias_ids,taxonomy.primary_section.additional_properties.original.navigation.nav_title,taxonomy.primary_section._id,taxonomy.primary_section.name,taxonomy.primary_section.path,taxonomy.tags,label,subheadlines.basic,headlines.basic,source.additional_properties.legacy_url,source.source_type,first_publish_date,display_date,canonical_url' # noqa
+            'website': 'liberation',
+            'website_url': '{}'.format(slug),
+            'published': 'true',
+            '_sourceInclude': '_id,content_restrictions.content_code,credits,promo_items.basic.caption,promo_items.basic.credits,promo_items.basic.url,promo_items.basic.height,promo_items.basic.width,promo_items.basic.resized_image_urls,promo_items.basic.last_updated_date,promo_items.lead_art.caption,promo_items.lead_art.credits,promo_items.lead_art.url,promo_items.lead_art.height,promo_items.lead_art.width,promo_items.lead_art.resized_image_urls,promo_items.lead_art.last_updated_date,source.additional_properties.legacy_url,content_elements,source.source_id,taxonomy.primary_section.additional_properties.original._admin.alias_ids,taxonomy.primary_section.additional_properties.original.navigation.nav_title,taxonomy.primary_section._id,taxonomy.primary_section.name,taxonomy.primary_section.path,taxonomy.tags,label,subheadlines.basic,headlines.basic,source.additional_properties.legacy_url,source.source_type,first_publish_date,display_date,canonical_url' # noqa
         }
         headers = {
             'cache-control': 'public, max-age=5',
