@@ -4,16 +4,10 @@
 import http.server
 import json
 import os
-import re
 import unittest
 from threading import Event, Thread
 
-from lxml.html import fromstring, tostring
-
-from calibre.utils.resources import get_path as P
-
-from .fetch import Browser
-from .simple import Overseer
+from .qt import Browser, WebEngineBrowser
 
 skip = ''
 is_sanitized = 'libasan' in os.environ.get('LD_PRELOAD', '')
@@ -23,38 +17,22 @@ elif 'SKIP_QT_BUILD_TEST' in os.environ:
     skip = 'Skipping Scraper tests as it causes crashes in macOS VM'
 
 
-@unittest.skipIf(skip, skip)
-class TestSimpleWebEngineScraper(unittest.TestCase):
-
-    def test_dom_load(self):
-        from qt.core import QUrl
-        overseer = Overseer()
-        for f in ('book', 'nav'):
-            path = P(f'templates/new_{f}.html', allow_user_override=False)
-            url = QUrl.fromLocalFile(path)
-            html = overseer.fetch_url(url, 'test')
-
-            def c(a):
-                ans = tostring(fromstring(a.encode('utf-8')), pretty_print=True, encoding='unicode')
-                return re.sub(r'\s+', ' ', ans)
-            with open(path, 'rb') as f:
-                raw = f.read().decode('utf-8')
-            self.assertEqual(c(html), c(raw))
-        self.assertRaises(ValueError, overseer.fetch_url, 'file:///does-not-exist.html', 'test')
-        w = overseer.workers
-        self.assertEqual(len(w), 1)
-        del overseer
-        self.assertFalse(w)
-
-
 class Handler(http.server.BaseHTTPRequestHandler):
 
     def __init__(self, test_obj, *a):
         self.test_obj = test_obj
         super().__init__(*a)
 
+    def do_POST(self):
+        if self.test_obj.dont_send_response:
+            return
+        self.do_response()
+
     def do_GET(self):
         if self.test_obj.dont_send_response:
+            return
+        if self.path == '/favicon.ico':
+            self.send_response(http.HTTPStatus.NOT_FOUND)
             return
         if self.path == '/redirect':
             self.send_response(http.HTTPStatus.FOUND)
@@ -62,6 +40,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.flush_headers()
             return
+        self.do_response()
+
+    def do_response(self):
         h = {}
         for k, v in self.headers.items():
             h.setdefault(k, []).append(v)
@@ -70,7 +51,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             'path': self.path,
             'headers': h,
             'request_count': self.test_obj.request_count,
+            'method': self.command,
         }
+        if 'Content-Length' in self.headers:
+            ans['data'] = self.rfile.read(int(self.headers['Content-Length'])).decode()
         data = json.dumps(ans).encode()
         self.send_response(http.HTTPStatus.OK)
         self.send_header('Content-type', 'application/json')
@@ -95,7 +79,8 @@ class TestFetchBackend(unittest.TestCase):
         self.server_started = Event()
         self.server_thread = Thread(target=self.run_server, daemon=True)
         self.server_thread.start()
-        self.server_started.wait(5)
+        if not self.server_started.wait(15):
+            raise Exception('Test server failed to start')
         self.request_count = 0
         self.dont_send_response = self.dont_send_body = False
 
@@ -103,19 +88,28 @@ class TestFetchBackend(unittest.TestCase):
         self.server.shutdown()
         self.server_thread.join(5)
 
-    def test_recipe_browser(self):
+    def test_recipe_browser_qt(self):
+        self.do_recipe_browser_test(Browser)
+
+    def test_recipe_browser_webengine(self):
+        self.do_recipe_browser_test(WebEngineBrowser)
+
+    def do_recipe_browser_test(self, browser_class):
         from urllib.error import URLError
         from urllib.request import Request
+
+        br = browser_class(user_agent='test-ua', headers=(('th', '1'),), start_worker=True)
+
         def u(path=''):
             return f'http://localhost:{self.port}{path}'
 
-        def get(path='', headers=None, timeout=None):
+        def get(path='', headers=None, timeout=None, data=None):
             url = u(path)
             if headers:
                 req = Request(url, headers=headers)
             else:
                 req = url
-            res = br.open(req, timeout=timeout)
+            res = br.open(req, data=data, timeout=timeout)
             raw = res.read()
             ans = json.loads(raw)
             ans['final_url'] = res.geturl()
@@ -134,42 +128,54 @@ class TestFetchBackend(unittest.TestCase):
             self.dont_send_body = False
             self.dont_send_response = False
 
-        br = Browser(user_agent='test-ua', headers=(('th', '1'),), start_worker=True)
+        def header(name, *expected):
+            name = name.lower()
+            ans = []
+            for k, v in r['headers'].items():
+                if k.lower() == name:
+                    ans.extend(v)
+            self.ae(expected, tuple(ans))
+
         try:
             r = get()
+            self.ae(r['method'], 'GET')
             self.ae(r['request_count'], 1)
-            self.ae(r['headers']['th'], ['1'])
-            self.ae(r['headers']['User-Agent'], ['test-ua'])
+            header('th', '1')
+            header('User-Agent', 'test-ua')
             self.assertIn('Accept-Encoding', r['headers'])
             r = get()
             self.ae(r['request_count'], 2)
-            self.ae(r['headers']['Cookie'], ['sc=1'])
+            header('Cookie', 'sc=1')
             test_with_timeout(True)
             test_with_timeout(False)
             r = get('/redirect')
             self.ae(r['path'], '/redirected')
-            self.ae(r['headers']['th'], ['1'])
+            header('th', '1')
             self.assertTrue(r['final_url'].endswith('/redirected'))
-            self.ae(r['headers']['User-Agent'], ['test-ua'])
+            header('User-Agent', 'test-ua')
             r = get(headers={'th': '2', 'tc': '1'})
-            self.ae(r['headers']['Th'], ['2'])
-            self.ae(r['headers']['Tc'], ['1'])
+            header('Th', '1, 2')
+            header('Tc', '1')
             br.set_simple_cookie('cook', 'ie')
             br.set_user_agent('man in black')
             r = get()
-            self.ae(r['headers']['User-Agent'], ['man in black'])
-            self.ae(r['headers']['Cookie'], ['sc=1; cook=ie'])
+            header('User-Agent', 'man in black')
+            header('Cookie', 'sc=1; cook=ie')
+            r = get(data=b'1234')
+            self.ae(r['method'], 'POST')
+            self.ae(r['data'], '1234')
+            header('Content-Type', 'application/x-www-form-urlencoded')
         finally:
             br.shutdown()
 
     def run_server(self):
-        import socketserver
+        from http.server import ThreadingHTTPServer
 
         def create_handler(*a):
             ans = Handler(self, *a)
             return ans
 
-        with socketserver.TCPServer(("", 0), create_handler) as httpd:
+        with ThreadingHTTPServer(("", 0), create_handler) as httpd:
             self.server = httpd
             self.port = httpd.server_address[1]
             self.server_started.set()
@@ -177,6 +183,4 @@ class TestFetchBackend(unittest.TestCase):
 
 
 def find_tests():
-    ans = unittest.defaultTestLoader.loadTestsFromTestCase(TestSimpleWebEngineScraper)
-    ans.addTests(iter(unittest.defaultTestLoader.loadTestsFromTestCase(TestFetchBackend)))
-    return ans
+    return unittest.defaultTestLoader.loadTestsFromTestCase(TestFetchBackend)

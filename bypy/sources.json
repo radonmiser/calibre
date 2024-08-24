@@ -507,6 +507,27 @@
     },
 
     {
+        "name": "nv-codec-headers",
+		"comment": "Needed for building Qt Multimedia, see https://code.qt.io/cgit/qt/qt5.git/tree/coin/provisioning/common/unix/install-ffmpeg.sh only change the version when bumping ffmpeg and qt versions.",
+        "os": "linux",
+        "unix": {
+            "filename": "nv-codec-headers-11.1.zip",
+            "hash": "sha256:d0262edcd464c36eddd35c754faf29799161a30b4f8635a4aa06f9ecedf053e2",
+            "urls": ["https://github.com/FFmpeg/nv-codec-headers/archive/refs/heads/sdk/11.1.zip"]
+        }
+    },
+
+    {
+        "name": "ffmpeg",
+		"comment": "Needed for building Qt Multimedia. Only change the version when bumping Qt version. Get the needed ffmpeg version from: https://doc.qt.io/qt-6/qtmultimedia-index.html#ffmpeg-as-the-default-backend",
+		"unix": {
+			"filename": "ffmpeg-6.1.2.tar.xz",
+			"hash": "sha256:3b624649725ecdc565c903ca6643d41f33bd49239922e45c9b1442c63dca4e38",
+			"urls": ["https://www.ffmpeg.org/releases/{filename}"]
+		}
+    },
+
+    {
         "name": "qt-base",
         "version": "6.7.2",
         "hashes": {
@@ -568,6 +589,20 @@
         "name": "qt-sensors",
         "hashes": {
             "unix": "sha256:ead1dec787c56ed4dc02ed810af54ff1e1f6875cb5cc2506c74eeb9554e6bb59"
+        }
+    },
+
+    {
+        "name": "qt-multimedia",
+        "hashes": {
+            "unix": "sha256:8ef835115acb9a1d3d2c9f23cfacb43f2c537e3786a8ab822299a2a7765651d3"
+        }
+    },
+
+    {
+        "name": "qt-speech",
+        "hashes": {
+            "unix": "sha256:cc8c769404e3e49713be304a73f936890a1ef2f88d590732785f34692a4814ce"
         }
     },
 
