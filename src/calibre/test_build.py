@@ -123,6 +123,15 @@ class BuildTest(unittest.TestCase):
         from speechd.client import SSIPClient
         del SSIPClient
 
+    @unittest.skipIf('SKIP_SPEECH_TESTS' in os.environ, 'Speech support is opted out')
+    def test_piper(self):
+        import subprocess
+
+        from calibre.constants import piper_cmdline
+        self.assertTrue(piper_cmdline())
+        raw = subprocess.check_output(piper_cmdline() + ('-h',), stderr=subprocess.STDOUT).decode()
+        self.assertIn('--sentence_silence', raw)
+
     def test_zeroconf(self):
         import ifaddr
         import zeroconf as z
@@ -314,7 +323,7 @@ class BuildTest(unittest.TestCase):
     def test_qt(self):
         if is_sanitized:
             raise unittest.SkipTest('Skipping Qt build test as sanitizer is enabled')
-        from qt.core import QApplication, QFontDatabase, QImageReader, QLoggingCategory, QNetworkAccessManager, QSslSocket, QTextToSpeech, QTimer
+        from qt.core import QApplication, QFontDatabase, QImageReader, QLoggingCategory, QNetworkAccessManager, QSslSocket, QTimer
         QLoggingCategory.setFilterRules('''qt.webenginecontext.debug=true''')
         if hasattr(os, 'geteuid') and os.geteuid() == 0:
             # likely a container build, webengine cannot run as root with sandbox
@@ -348,10 +357,15 @@ class BuildTest(unittest.TestCase):
         try:
             ensure_app()
             self.assertGreaterEqual(len(QFontDatabase.families()), 5, 'The QPA headless plugin is not able to locate enough system fonts via fontconfig')
-            available_tts_engines = tuple(x for x in QTextToSpeech.availableEngines() if x != 'mock')
-            self.assertTrue(available_tts_engines)
 
-            self.assertGreaterEqual
+            if 'SKIP_SPEECH_TESTS' not in os.environ:
+                from qt.core import QMediaDevices, QTextToSpeech
+
+                available_tts_engines = tuple(x for x in QTextToSpeech.availableEngines() if x != 'mock')
+                self.assertTrue(available_tts_engines)
+
+                QMediaDevices.audioOutputs()
+
             from calibre.ebooks.oeb.transforms.rasterize import rasterize_svg
             img = rasterize_svg(as_qimage=True)
             self.assertFalse(img.isNull())

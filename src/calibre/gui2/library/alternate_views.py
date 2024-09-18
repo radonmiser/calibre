@@ -15,7 +15,6 @@ from io import BytesIO
 from textwrap import wrap
 from threading import Event, Thread
 
-from PIL import Image
 from qt.core import (
     QAbstractItemView,
     QApplication,
@@ -881,7 +880,7 @@ class GridView(QListView):
         bgcol = QColor(r, g, b)
         pal.setColor(QPalette.ColorRole.Base, bgcol)
         self.setPalette(pal)
-        ss = f'background-color: {bgcol.name()}; '
+        ss = f'background-color: {bgcol.name()}; border: 0px solid {bgcol.name()};'
         if tex:
             from calibre.gui2.preferences.texture_chooser import texture_path
             path = texture_path(tex)
@@ -1017,6 +1016,7 @@ class GridView(QListView):
                                                                      as_what='pil_image')
             if has_cover:
                 if tcdata is None:
+                    from PIL import Image
                     # The cached cover is up-to-date. Convert the cached bytes
                     # to a PIL image
                     cache_valid = True

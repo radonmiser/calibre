@@ -12,6 +12,7 @@ def re_html(y):
     if y:
         soup = BeautifulSoup(y.rstrip())
         return soup.text
+    return ''
 
 def get_id(url):
     rq = browser().open(url)
@@ -92,11 +93,9 @@ class tls(BasicNewsRecipe):
         self.log('              ', title, '\n\t', desc, '\n\t', url)
         return ({ 'title': title, 'description': desc, 'url': url })
 
-    def print_version(self, url):
-        return 'https://www.the-tls.co.uk/wp-json/tls/v2/single-article/' + get_id(url)
-
     def preprocess_raw_html(self, raw, *a):
-        data = json.loads(raw)
+        pg = re.search(r'var tlsPageObject = ({.+)', raw).group(1)
+        data = json.JSONDecoder().raw_decode(pg)[0]
         if 'articleIntroPrimary' in data:
             prim = data['articleIntroPrimary']
             title = '<h1>' + prim['headline'] + '</h1>\n'
@@ -119,10 +118,21 @@ class tls(BasicNewsRecipe):
         else:
             prim = title = desc = label = auth = lede = ''
 
+        if 'article_data_leadimage' in data:
+            i = data['article_data_leadimage']
+            if 'full_image' in i and i['full_image']:
+                lede = '<br><img src="{}"><div class="figc">{}</div>'.format(
+                    i['full_image'] + '?w600', i['imagecaption'] + ' <i>' \
+                        + i['imagecredit'] + '</i>'
+                )
+        cont = self.index_to_soup('https://www.the-tls.co.uk/wp-json/tls/v2/single-article/' + data['ID'], raw=True)
+        c_data = json.loads(cont)
+        body = c_data['content']
+
         bks = ''
-        if data['bookdetails']:
+        if 'bookdetails' in c_data and c_data['bookdetails']:
             bks += '<br>'
-            for a in data['bookdetails']:
+            for a in c_data['bookdetails']:
                 for x, y in a.items():
                     if isinstance(y, str):
                         if x == 'imageurl':
@@ -130,15 +140,6 @@ class tls(BasicNewsRecipe):
                         elif y:
                             bks += '<div class="det">' + y + '</div>\n'
                 bks += '<br>'
-
-        if 'leadimage' in data:
-            if 'full_image' in data['leadimage'] and data['leadimage']['full_image']:
-                lede = '<br><img src="{}"><div class="figc">{}</div>'.format(
-                    data['leadimage']['full_image'] + '?w600', data['leadimage']['imagecaption'] + ' <i>' \
-                        + data['leadimage']['imagecredit'] + '</i>'
-                )
-
-        body = data['content']
 
         html = '<html><body><div>' \
                     + label + title + desc + auth + lede + bks + body + \
