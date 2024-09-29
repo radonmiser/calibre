@@ -13,11 +13,11 @@ from itertools import count
 from time import monotonic
 
 from qt.core import (
+    QApplication,
     QAudio,
     QAudioFormat,
     QAudioSink,
     QByteArray,
-    QDialog,
     QIODevice,
     QIODeviceBase,
     QMediaDevices,
@@ -286,7 +286,7 @@ class Piper(TTSBackend):
 
             cmdline = list(piper_cmdline()) + [
                 '--model', model_path, '--config', config_path, '--output-raw', '--json-input',
-                '--sentence-silence', '0', '--length_scale', str(length_scale)]
+                '--sentence-silence', str(s.sentence_delay), '--length_scale', str(length_scale)]
             if is_debugging():
                 cmdline.append('--debug')
             self._process.setProgram(cmdline[0])
@@ -406,6 +406,9 @@ class Piper(TTSBackend):
         ans = []
         lang_voices_map = {}
         self._voice_name_map = {}
+        downloaded = set()
+        with suppress(OSError):
+            downloaded = set(os.listdir(self.cache_dir))
         for bcp_code, voice_map in d['lang_map'].items():
             lang, sep, country = bcp_code.partition('_')
             lang = canonicalize_lang(lang) or lang
@@ -416,9 +419,10 @@ class Piper(TTSBackend):
                     q = Quality.from_piper_quality(qual)
                     if best_qual is None or q.value < best_qual.value:
                         best_qual = q
+                        mf = f'{bcp_code}-{voice_name}-{qual}.onnx'
                         voice = Voice(bcp_code + ':' + voice_name, lang, country, human_name=voice_name, quality=q, engine_data={
                             'model_url': e['model'], 'config_url': e['config'],
-                            'model_filename': f'{bcp_code}-{voice_name}-{qual}.onnx',
+                            'model_filename': mf, 'is_downloaded': mf in downloaded,
                         })
                 if voice:
                     ans.append(voice)
@@ -442,9 +446,13 @@ class Piper(TTSBackend):
         lang = canonicalize_lang(lang) or lang
         return self._voice_for_lang.get(lang) or self._voice_for_lang['eng']
 
+    @property
+    def cache_dir(self) -> str:
+        return os.path.join(cache_dir(), 'piper-voices')
+
     def _paths_for_voice(self, voice: Voice) -> tuple[str, str]:
         fname = voice.engine_data['model_filename']
-        model_path = os.path.join(cache_dir(), 'piper-voices', fname)
+        model_path = os.path.join(self.cache_dir, fname)
         config_path = os.path.join(os.path.dirname(model_path), fname + '.json')
         return model_path, config_path
 
@@ -462,6 +470,7 @@ class Piper(TTSBackend):
         for path in self._paths_for_voice(v):
             with suppress(FileNotFoundError):
                 os.remove(path)
+        v.engine_data['is_downloaded'] = False
 
     def _download_voice(self, voice: Voice, download_even_if_exists: bool = False) -> tuple[str, str]:
         model_path, config_path = self._paths_for_voice(voice)
@@ -469,14 +478,14 @@ class Piper(TTSBackend):
             if not download_even_if_exists:
                 return model_path, config_path
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        from calibre.gui2.tts.download import DownloadResources
-        d = DownloadResources(_('Downloading voice for Read aloud'), _('Downloading neural network for the {} voice').format(voice.human_name), {
-            voice.engine_data['model_url']: (model_path, _('Neural network data')),
-            voice.engine_data['config_url']: (config_path, _('Neural network metadata')),
-        }, parent=widget_parent(self))
-        if d.exec() == QDialog.DialogCode.Accepted:
-            return model_path, config_path
-        return '', ''
+        from calibre.gui2.tts.download import download_resources
+        ok = download_resources(_('Downloading voice for Read aloud'), _('Downloading neural network for the {} voice').format(voice.human_name), {
+                voice.engine_data['model_url']: (model_path, _('Neural network data')),
+                voice.engine_data['config_url']: (config_path, _('Neural network metadata')),
+            }, parent=widget_parent(self), headless=getattr(QApplication.instance(), 'headless', False)
+        )
+        voice.engine_data['is_downloaded'] = bool(ok)
+        return (model_path, config_path) if ok else ('', '')
 
     def download_voice(self, v: Voice) -> None:
         if not v.name:

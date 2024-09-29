@@ -3,6 +3,8 @@
 
 from qt.core import (
     QCheckBox,
+    QDoubleSpinBox,
+    QFont,
     QFormLayout,
     QHBoxLayout,
     QIcon,
@@ -68,6 +70,26 @@ class EngineChoice(QWidget):
         engine = self.value or default_engine_name()
         metadata = available_engines()[engine]
         self.engine_description.setText(metadata.description)
+
+
+class SentenceDelay(QDoubleSpinBox):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setRange(0., 2.)
+        self.setDecimals(2)
+        self.setSuffix(_(' seconds'))
+        self.setToolTip(_('The number of seconds to pause for at the end of a sentence.'))
+        self.setSpecialValueText(_('no pause'))
+        self.setSingleStep(0.05)
+
+    @property
+    def val(self) -> str:
+        return max(0.0, self.value())
+
+    @val.setter
+    def val(self, v) -> None:
+        self.setValue(float(v))
 
 
 class FloatSlider(QSlider):
@@ -136,20 +158,30 @@ class Voices(QTreeWidget):
         self.setHeaderHidden(True)
         self.system_default_voice = Voice()
         self.currentItemChanged.connect(self.voice_changed)
+        self.normal_font = f = self.font()
+        self.highlight_font = f = QFont(f)
+        f.setBold(True), f.setItalic(True)
 
     def sizeHint(self) -> QSize:
         return QSize(400, 500)
+
+    def set_item_downloaded_state(self, ans: QTreeWidgetItem) -> None:
+        voice = ans.data(0, Qt.ItemDataRole.UserRole)
+        is_downloaded = bool(voice.engine_data and voice.engine_data.get('is_downloaded'))
+        ans.setFont(0, self.highlight_font if is_downloaded else self.normal_font)
 
     def set_voices(self, all_voices: tuple[Voice, ...], current_voice: str, engine_metadata: EngineMetadata) -> None:
         self.clear()
         current_item = None
         def qv(parent, voice):
             nonlocal current_item
-            ans = QTreeWidgetItem(parent, [voice.short_text(engine_metadata)])
+            text = voice.short_text(engine_metadata)
+            ans = QTreeWidgetItem(parent, [text])
             ans.setData(0, Qt.ItemDataRole.UserRole, voice)
             ans.setToolTip(0, voice.tooltip(engine_metadata))
             if current_voice == voice.name:
                 current_item = ans
+            self.set_item_downloaded_state(ans)
             return ans
         qv(self.invisibleRootItem(), self.system_default_voice)
         vmap = {}
@@ -182,6 +214,11 @@ class Voices(QTreeWidget):
         if ci is not None:
             return ci.data(0, Qt.ItemDataRole.UserRole)
 
+    def refresh_current_item(self) -> None:
+        ci = self.currentItem()
+        if ci is not None:
+            self.set_item_downloaded_state(ci)
+
 
 class EngineSpecificConfig(QWidget):
 
@@ -204,6 +241,8 @@ class EngineSpecificConfig(QWidget):
         self.engine_specific_settings = {}
         self.rate = r = FloatSlider(parent=self)
         l.addRow(_('&Speed of speech:'), r)
+        self.sentence_delay = d = SentenceDelay(parent=self)
+        l.addRow(_('&Pause after sentence:'), d)
         self.pitch = p = FloatSlider(parent=self)
         l.addRow(_('&Pitch of speech:'), p)
         self.volume = v = Volume(self)
@@ -240,6 +279,7 @@ class EngineSpecificConfig(QWidget):
         else:
             self.layout().setRowVisible(self.output_module, False)
         self.output_module.blockSignals(False)
+        self.layout().setRowVisible(self.sentence_delay, metadata.has_sentence_delay)
         try:
             s = self.engine_specific_settings[self.engine_name]
         except KeyError:
@@ -258,6 +298,8 @@ class EngineSpecificConfig(QWidget):
         else:
             self.layout().setRowVisible(self.volume, False)
             self.volume.val = None
+        if metadata.has_sentence_delay:
+            self.sentence_delay.val = s.sentence_delay
         self.audio_device.clear()
         if metadata.allows_choosing_audio_device:
             self.audio_device.addItem(_('System default (currently {})').format(self.default_audio_device.description), '')
@@ -289,6 +331,8 @@ class EngineSpecificConfig(QWidget):
             engine_name=self.engine_name,
             rate=self.rate.val, voice_name=self.voices.val, pitch=self.pitch.val, volume=self.volume.val)
         metadata = available_engines()[self.engine_name]
+        if metadata.has_sentence_delay:
+            ans = ans._replace(sentence_delay=self.sentence_delay.val)
         if metadata.has_multiple_output_modules and self.output_module.currentIndex() > 0:
             ans = ans._replace(output_module=self.output_module.currentData())
         if metadata.allows_choosing_audio_device and self.audio_device.currentIndex() > 0:
@@ -357,6 +401,7 @@ class ConfigDialog(Dialog):
         else:
             b.setIcon(QIcon.ic('download-metadata.png'))
             b.setText(_('Download voice'))
+        self.engine_specific_config.voices.refresh_current_item()
 
     def voice_action(self):
         self.engine_specific_config.voice_action()
