@@ -512,6 +512,7 @@ def embed_tts(container, report_progress=None, parent_widget=None):
             file_duration += duration
             wav.write(audio_data)
             make_par(container, seq, html_href, audio_href, s.elem_id, pos, duration)
+            pos += duration
         if len(seq):
             seq[-1].tail = seq.text[:-2]
         wav.seek(0)
