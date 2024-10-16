@@ -1,34 +1,32 @@
 #!/usr/bin/env python
 # vim:fileencoding=utf-8
-from calibre.web.feeds.news import BasicNewsRecipe, classes
+
+from calibre.web.feeds.news import BasicNewsRecipe
 
 
 class NatGeo(BasicNewsRecipe):
-    title = 'National Geographic History'
-    description = (
-        'From Caesar to Napoleon, the Pyramids to the Parthenon, the Trojan War to the Civil War—National Geographic '
-        'HISTORY draws readers in with more than 5,000 years of people, places, and things to explore.'
-    )
+    title = 'National Geographic Kids'
+    description = 'The National Geographic, an American monthly magazine'
     language = 'en'
     encoding = 'utf8'
-    publisher = 'nationalgeographic.com'
+    publisher = 'kids.nationalgeographic.com'
     category = 'science, nat geo'
-    __author__ = 'Kovid Goyal, unkn0wn'
+    __author__ = 'unkn0wn'
     description = 'Inspiring people to care about the planet since 1888'
     timefmt = ' [%a, %d %b, %Y]'
-    no_stylesheets = True
     use_embedded_content = False
-    remove_attributes = ['style']
-    remove_javascript = False
+    remove_javascript = True
     masthead_url = 'https://i.natgeofe.com/n/e76f5368-6797-4794-b7f6-8d757c79ea5c/ng-logo-2fl.png?w=600&h=600'
+    remove_empty_feeds = True
     resolve_internal_links = True
+    ignore_duplicate_articles = {'title', 'url'}
 
     recipe_specific_options = {
         'res': {
             'short': 'For hi-res images, select a resolution from the\nfollowing options: 800, 1000, 1200 or 1500',
             'long': 'This is useful for non e-ink devices, and for a lower file size\nthan the default, use 400 or 300.',
             'default': '600',
-        }
+        },
     }
 
     @property
@@ -52,27 +50,32 @@ class NatGeo(BasicNewsRecipe):
         .auth, .time, .sub { font-size:small; color:#5c5c5c; }
     """
 
-    def get_cover_url(self):
-        soup = self.index_to_soup('https://ngsingleissues.nationalgeographic.com/history')
-        wrap = soup.find(attrs={'class': 'product-image-wrapper'})
-        return wrap.img['src']
-
     def parse_index(self):
-        soup = self.index_to_soup(
-            'https://www.nationalgeographic.com/history/history-magazine'
-        )
-        ans = []
-        for article in soup.findAll('article'):
-            a = article.find('a')
-            url = a['href']
-            if url.startswith('/'):
-                url = 'https://www.nationalgeographic.com' + url
-            title = self.tag_to_string(
-                article.find(**classes('PromoTile__Title--truncated'))
-            )
-            ans.append({'title': title, 'url': url})
-            self.log(title, '  ', url)
-        return [('Articles', ans)]
+        index = 'https://kids.nationalgeographic.com/'
+        sections = [
+            'Front Page', 'animals', 'history', 'science',
+            'space', 'homework-help', 'crafts',
+        ]
+        feeds = []
+        for sec in sections:
+            section = sec.capitalize()
+            self.log(section)
+            url = index + sec
+            if sec.startswith('Front'):
+                url = index
+            self.log('Fetching articles from ', url)
+            soup = self.index_to_soup(url)
+            articles = []
+            for a in soup.findAll('a', attrs={'href': lambda x: x and '/article/' in x}):
+                if a.find('img') and '/games/' in a['href']:
+                    continue
+                url = a['href']
+                title = self.tag_to_string(a)
+                self.log('\t', title, '\n\t\t', url)
+                articles.append({'title': title, 'url': url})
+            if articles:
+                feeds.append((section, articles))
+        return feeds
 
     def preprocess_html(self, soup):
         for h2 in soup.findAll('h2'):
