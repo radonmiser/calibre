@@ -545,8 +545,12 @@ def embed_tts(container, report_progress=None, callback_to_download_voices=None)
         seq.text = seq.text[:seq.text.find('X')]
         audio_href = container.name_to_href(pfd.audio_file_name, pfd.smil_file_name)
         html_href = container.name_to_href(pfd.name, pfd.smil_file_name)
-        for elem_id, clip_start, duration in durations:
-            make_par(container, seq, html_href, audio_href, elem_id, clip_start, duration)
+        file_duration = 0
+        for i, s in enumerate(pfd.sentences):
+            audio_data, duration = audio_map[s]
+            file_duration += duration
+            wav.write(audio_data)
+            make_par(container, seq, html_href, audio_href, s.elem_id, pos, duration)
         if len(seq):
             seq[-1].tail = seq.text[:-2]
         wav.seek(0)
