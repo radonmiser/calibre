@@ -1808,6 +1808,18 @@ class IdentifiersEdit(QLineEdit, ToMetadataMixin, LineEditIndicators):
                     return True
             except Exception:
                 pass
+        for (key, prefix) in (
+            ('doi', 'https://dx.doi.org/'),
+            ('doi', 'https://doi.org/'),
+            ('arxiv', 'https://arxiv.org/abs/'),
+            ('oclc', 'https://www.worldcat.org/oclc/'),
+            ('issn', 'https://www.worldcat.org/issn/'),
+        ):
+            if text.startswith(prefix):
+                vals = self.current_val
+                vals[key] = text[len(prefix):].strip()
+                self.current_val = vals
+                return True
 
         return False
 # }}}
@@ -1854,7 +1866,7 @@ class ISBNDialog(QDialog):  # {{{
         isbn = str(txt)
         ok = None
         if not isbn:
-            pass
+            extra = ''
         elif check_isbn(isbn) is not None:
             extra = _('This ISBN is valid')
             ok = True
