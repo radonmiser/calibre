@@ -9,7 +9,7 @@ from read_book.viewport import get_unit_size_in_pixels, scroll_viewport
 
 HOLD_THRESHOLD = 750  # milliseconds
 TAP_THRESHOLD = 8  # pixels
-SWIPE_THRESHOLD = 64  # pixels
+SWIPE_THRESHOLD = 8  # pixels
 TAP_LINK_THRESHOLD = 5  # pixels
 PINCH_THRESHOLD = 20  # pixels
 GESTURE = {k:k for k in v"""[
