@@ -36,7 +36,17 @@ from calibre.utils.config import Config, ConfigProxy, OptionParser, make_config_
 from polyglot.builtins import iteritems, itervalues
 
 builtin_names = frozenset(p.name for p in builtin_plugins)
-BLACKLISTED_PLUGINS = frozenset({'Marvin XD', 'iOS reader applications'})
+BLACKLISTED_PLUGINS = frozenset({
+    'Marvin XD',
+    'iOS reader applications',
+
+    # Subsumed by builtin functionality
+    'KoboTouchExtended',
+    'KePub Input',
+    'KePub Output',
+    'KePub Metadata Reader',
+    'KePub Metadata Writer',
+})
 
 
 def zip_value(iterable, value):
@@ -661,6 +671,13 @@ def device_plugins(include_disabled=False):
                     yield plugin
 
 
+def usbms_plugins(include_disabled=True):
+    from calibre.devices.usbms.driver import USBMS
+    for plugin in device_plugins(include_disabled):
+        if isinstance(plugin, USBMS) and plugin.name not in ('Folder Device Interface',):
+            yield plugin
+
+
 def disabled_device_plugins():
     for plugin in _initialized_plugins:
         if isinstance(plugin, DevicePlugin):
@@ -765,6 +782,12 @@ def initialize_plugins(perf=False):
     for p in system_conflicts:
         system_plugins.pop(p, None)
     external_plugins = config['plugins'].copy()
+
+    if 'KoboTouchExtended' in external_plugins and is_disabled('KoboTouch') and not is_disabled('KoboTouchExtended'):
+        # We remove KoboTouchExtended and re-enable KoboTouch so that the Kobo
+        # device keeps working even though KoboTouchExtended is blacklisted.
+        disable_plugin('KoboTouchExtended')
+        enable_plugin('KoboTouch')
     for name in BLACKLISTED_PLUGINS:
         external_plugins.pop(name, None)
         system_plugins.pop(name, None)

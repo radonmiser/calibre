@@ -2,20 +2,67 @@
 # License: GPLv3 Copyright: 2025, Kovid Goyal <kovid at kovidgoyal.net>
 
 
-from calibre.ebooks.oeb.polish.kepubify import kepubify_html_data, remove_kobo_markup_from_html, serialize_html
+from calibre.ebooks.oeb.base import OEB_DOCS, OEB_STYLES
+from calibre.ebooks.oeb.polish.container import EpubContainer, get_container
+from calibre.ebooks.oeb.polish.kepubify import (
+    CSS_COMMENT_COOKIE,
+    DUMMY_COVER_IMAGE_NAME,
+    DUMMY_TITLE_PAGE_NAME,
+    KOBO_JS_NAME,
+    Options,
+    kepubify_html_data,
+    kepubify_parsed_html,
+    kepubify_path,
+    serialize_html,
+    unkepubify_path,
+)
 from calibre.ebooks.oeb.polish.parsing import parse
-from calibre.ebooks.oeb.polish.tests.base import BaseTest
+from calibre.ebooks.oeb.polish.tests.base import BaseTest, get_book_for_kepubify
 
 
 class KepubifyTests(BaseTest):
 
+    def test_kepubify(self):
+        def b(has_cover=True, epub_version='3'):
+            path = get_book_for_kepubify(has_cover=has_cover, epub_version=epub_version)
+            opts = Options()._replace(remove_widows_and_orphans=True, remove_at_page_rules=True)
+            outpath = kepubify_path(path, opts=opts, allow_overwrite=True)
+            c = get_container(outpath, tweak_mode=True, ebook_cls=EpubContainer)
+            spine_names = tuple(n for n, is_linear in c.spine_names)
+            cname = 'titlepage.xhtml' if has_cover else f'{DUMMY_TITLE_PAGE_NAME}.xhtml'
+            self.assertEqual(spine_names, (cname, 'index_split_000.html', 'index_split_001.html'))
+            ps = c.open('page_styles.css', 'r').read()
+            for q in (f'{CSS_COMMENT_COOKIE}: @page', f'-{CSS_COMMENT_COOKIE}-widows', f'-{CSS_COMMENT_COOKIE}-orphans'):
+                self.assertIn(q, ps)
+            cimage = ('cover.png',) if has_cover else (f'{DUMMY_COVER_IMAGE_NAME}.jpeg',)
+            self.assertEqual(cimage, tuple(c.manifest_items_with_property('cover-image')))
+            # unkepubify
+            outpath = unkepubify_path(outpath)
+            expected = get_container(path, tweak_mode=True)
+            actual = get_container(outpath, tweak_mode=True)
+            self.assertEqual(
+                tuple(expected.manifest_items_with_property('cover-image')), tuple(actual.manifest_items_with_property('cover-image')))
+            self.assertEqual(tuple(expected.mime_map), tuple(actual.mime_map))
+            for name, mt in expected.mime_map.items():
+                if mt in OEB_DOCS or mt in OEB_STYLES or name.endswith('.opf'):
+                    self.assertEqual(expected.open(name, 'rb').read(), actual.open(name, 'rb').read())
+
+        for has_cover in (True, False):
+            for epub_version in '23':
+                b(has_cover, epub_version)
+
     def test_kepubify_html(self):
-        prefix = '''<?xml version='1.0' encoding='utf-8'?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><style type="text/css" class="kobostylehacks">\
-div#book-inner { margin-top: 0; margin-bottom: 0; }</style></head><body><div id="book-columns"><div id="book-inner">'''
+        prefix = f'''<?xml version='1.0' encoding='utf-8'?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><style type="text/css" id="kobostylehacks">\
+div#book-inner {{ margin-top: 0; margin-bottom: 0; }}</style><script type="text/javascript" src="{KOBO_JS_NAME}"/></head>\
+<body><div id="book-columns"><div id="book-inner">'''
         suffix =  '</div></div></body></html>'
         for src, expected in {
             # basics
+            '<p>one</p>  <p>\xa0</p><p>\xa0<i>a</i></p>':
+            '<p><span class="koboSpan" id="kobo.1.1">one</span></p>  <p><span class="koboSpan" id="kobo.2.1">&#160;</span></p>'
+            '<p>&#160;<i><span class="koboSpan" id="kobo.3.1">a</span></i></p>',
+
             '<p>Simple sentences. In a single paragraph.'
             '<p>A sentence <i>with <b>nested</b>, tailed</i> formatting. Another.':
 
@@ -56,12 +103,20 @@ div#book-inner { margin-top: 0; margin-bottom: 0; }</style></head><body><div id=
             '<p><span class="koboSpan" id="kobo.1.1">A&#160;nbsp;&#160;</span></p>',
             '<div><script>1 < 2 & 3</script>':  # escaping with cdata note that kepubify doesnt do this
             '<div><script><![CDATA[1 < 2 & 3]]></script></div>',
+
+            # CSS filtering
+            '<div><style>@page {\n  margin: 13px;\n}\ndiv {\n  widows: 12;\n  color: red;\n}</style>Some</div>':
+            f'<div><style>/* {CSS_COMMENT_COOKIE}: @page {{\n  margin: 13px;\n}} */\n'
+            f'div {{\n  -{CSS_COMMENT_COOKIE}-widows: 12;\n  color: red;\n}}</style>'
+            '<span class="koboSpan" id="kobo.1.1">Some</span></div>'
         }.items():
-            root = kepubify_html_data(src)
+            opts = Options()._replace(remove_widows_and_orphans=True, remove_at_page_rules=True)
+            root = kepubify_html_data(src, KOBO_JS_NAME, opts)
             actual = serialize_html(root).decode('utf-8')
             actual = actual[len(prefix):-len(suffix)]
             self.assertEqual(expected, actual)
             expected = serialize_html(parse(src)).decode('utf-8')
-            remove_kobo_markup_from_html(root)
+            opts = opts._replace(for_removal=True)
+            kepubify_parsed_html(root, KOBO_JS_NAME, opts)
             actual = serialize_html(root).decode('utf-8')
             self.assertEqual(expected, actual)
