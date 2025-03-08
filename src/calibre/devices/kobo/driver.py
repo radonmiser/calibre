@@ -30,7 +30,6 @@ from calibre.devices.usbms.driver import USBMS
 from calibre.ebooks import DRMError
 from calibre.ebooks.metadata import authors_to_string
 from calibre.ebooks.metadata.book.base import Metadata
-from calibre.ebooks.metadata.utils import normalize_languages
 from calibre.prints import debug_print
 from calibre.ptempfile import PersistentTemporaryFile, TemporaryDirectory, better_mktemp
 from calibre.utils.config_base import prefs
@@ -1428,7 +1427,7 @@ class KOBOTOUCH(KOBO):
         ' Based on the existing Kobo driver by %s.') % KOBO.author
     # icon        = 'devices/kobotouch.jpg'
 
-    supported_dbversion             = 190
+    supported_dbversion             = 191
     min_supported_dbversion         = 53
     min_dbversion_series            = 65
     min_dbversion_externalid        = 65
@@ -1443,7 +1442,7 @@ class KOBOTOUCH(KOBO):
     # Starting with firmware version 3.19.x, the last number appears to be is a
     # build number. A number will be recorded here but it can be safely ignored
     # when testing the firmware version.
-    max_supported_fwversion         = (5, 4, 197982)
+    max_supported_fwversion         = (5, 6, 209315)
     # The following document firmware versions where new function or devices were added.
     # Not all are used, but this feels a good place to record it.
     min_fwversion_shelves           = (2, 0, 0)
@@ -2310,13 +2309,16 @@ class KOBOTOUCH(KOBO):
                     return True
                 from calibre.ebooks.metadata.book.formatter import SafeFormat
                 kepubify = SafeFormat().safe_format(template, mi, 'Open With template error', mi)
-                debug_print(f'kepubify_template_result for {mi.title}:', kepubify)
+                debug_print(f'kepubify_template_result for {mi.title}:', repr(kepubify))
                 if kepubify is not None and kepubify.startswith('PLUGBOARD TEMPLATE ERROR'):
                     import sys
                     print(f'kepubify template: {template} returned error', file=sys.stderr)
                     kepubifiable.add(mi.uuid)
                     return True
-                return kepubify and kepubify != 'false'
+                if kepubify and kepubify.lower() not in ('false', '0', 'no'):
+                    kepubifiable.add(mi.uuid)
+                    return True
+                return False
             return modify_css
 
         self.extra_css, self.extra_sheet = self.get_extra_css()
@@ -2850,7 +2852,12 @@ class KOBOTOUCH(KOBO):
         ImageID = ContentID.replace('/', '_')
         ImageID = ImageID.replace(' ', '_')
         ImageID = ImageID.replace(':', '_')
-        ImageID = ImageID.replace('.', '_')
+        if self.isTolinoDevice() and self.dbversion >= 191:
+            ImageID_split = ImageID.rsplit('.', 1)
+            ImageID_split[0] = ImageID_split[0].replace('.', '_')
+            ImageId = '.'.join(ImageID_split)
+        else:
+            ImageID = ImageID.replace('.', '_')
         return ImageID
 
     def images_path(self, path, imageId=None):
@@ -3382,6 +3389,7 @@ class KOBOTOUCH(KOBO):
             debug_print('KoboTouch:set_series - end')
 
     def set_core_metadata(self, connection, book, series_only=False):
+        from calibre.ebooks.metadata.utils import normalize_languages
         # debug_print('KoboTouch:set_core_metadata book="%s"' % book.title)
         show_debug = self.is_debugging_title(book.title)
         if show_debug:

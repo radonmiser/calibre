@@ -133,11 +133,11 @@ default_disabled_plugins = {
 }
 
 
-def is_disabled(plugin):
-    if plugin.name in config['enabled_plugins']:
+def is_disabled(plugin_or_name):
+    name = getattr(plugin_or_name, 'name', plugin_or_name)
+    if name in config['enabled_plugins']:
         return False
-    return plugin.name in config['disabled_plugins'] or \
-            plugin.name in default_disabled_plugins
+    return name in config['disabled_plugins'] or name in default_disabled_plugins
 # }}}
 
 
@@ -674,7 +674,7 @@ def device_plugins(include_disabled=False):
 def usbms_plugins(include_disabled=True):
     from calibre.devices.usbms.driver import USBMS
     for plugin in device_plugins(include_disabled):
-        if isinstance(plugin, USBMS) and plugin.name not in ('Folder Device Interface',):
+        if isinstance(plugin, USBMS) and plugin.name not in ('Folder Device Interface', 'User Defined USB driver'):
             yield plugin
 
 
@@ -733,7 +733,7 @@ def all_edit_book_tool_plugins():
 _initialized_plugins = []
 
 
-def initialize_plugin(plugin, path_to_zip_file, installation_type):
+def initialize_plugin(plugin, path_to_zip_file=None, installation_type=PluginInstallationType.BUILTIN):
     try:
         p = plugin(path_to_zip_file)
         p.installation_type = installation_type
