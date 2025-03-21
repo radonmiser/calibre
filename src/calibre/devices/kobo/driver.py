@@ -173,15 +173,11 @@ class KOBO(USBMS):
     def initialize(self):
         USBMS.initialize(self)
         self.dbversion = 7
-        self._device_version_info = None
 
-    def eject(self):
-        self._device_version_info = None
-        super().eject()
-
-    def device_version_info(self):
+    def device_version_info(self, reload: bool = False):
         debug_print('device_version_info - start')
-        if not self._device_version_info:
+        if self._device_version_info is None or reload:
+            self._device_version_info = []
             version_file = os.path.join(self._main_prefix, KOBO_ROOT_DIR_NAME, 'version')
             debug_print(f'device_version_info - version_file={version_file}')
             if os.path.isfile(version_file):
@@ -1603,6 +1599,7 @@ class KOBOTOUCH(KOBO):
 
     def post_open_callback(self):
         from calibre.devices.kobo.db import Database
+        self.device_version_info(reload=True)
         # delete empty directories in root they get left behind when deleting
         # books on device.
         for prefix in (self._main_prefix, self._card_a_prefix, self._card_b_prefix):
@@ -2861,7 +2858,7 @@ class KOBOTOUCH(KOBO):
             # NOTE: Unlike Qt, we round to avoid accumulating errors,
             #       as ImageOps will then floor via fit_image
             aspect_ratio = library_size[0] / library_size[1]
-            rescaled_width = int(round(kobo_size[1] * aspect_ratio))
+            rescaled_width = round(kobo_size[1] * aspect_ratio)
 
             if expand:
                 use_height = (rescaled_width >= kobo_size[0])
@@ -2871,7 +2868,7 @@ class KOBOTOUCH(KOBO):
             if use_height:
                 kobo_size = (rescaled_width, kobo_size[1])
             else:
-                kobo_size = (kobo_size[0], int(round(kobo_size[0] / aspect_ratio)))
+                kobo_size = (kobo_size[0], round(kobo_size[0] / aspect_ratio))
 
             # Did we actually want to letterbox?
             if not letterbox:
@@ -3702,7 +3699,7 @@ class KOBOTOUCH(KOBO):
             m('Clara HD', cls.CLARA_HD_PRODUCT_ID),
             m('Clara 2E', cls.CLARA_2E_PRODUCT_ID),
             m('Clara Black and White', cls.CLARA_BW_PRODUCT_ID),
-            m('Clara Color', cls.CLARA_COLOR_PRODUCT_ID),
+            m('Clara Colour', cls.CLARA_COLOR_PRODUCT_ID),
             m('Elipsa', cls.ELIPSA_PRODUCT_ID),
             m('Elipsa 2E', cls.ELIPSA_2E_PRODUCT_ID),
             m('Forma', cls.FORMA_PRODUCT_ID),
@@ -3710,6 +3707,7 @@ class KOBOTOUCH(KOBO):
             m('Glo HD', cls.GLO_HD_PRODUCT_ID),
             m('Libra H2O', cls.LIBRA_H2O_PRODUCT_ID),
             m('Libra 2', cls.LIBRA2_PRODUCT_ID),
+            m('Libra Colour', cls.LIBRA_COLOR_PRODUCT_ID),
             m('Mini', cls.MINI_PRODUCT_ID),
             m('Nia', cls.NIA_PRODUCT_ID),
             m('Sage', cls.SAGE_PRODUCT_ID),
