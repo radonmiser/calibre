@@ -1213,6 +1213,8 @@ class Application(QApplication):
             QApplication.setDesktopFileName(override_program_name)
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)  # needed for webengine
         QApplication.__init__(self, args)
+        # See https://bugreports.qt.io/browse/QTBUG-134316
+        QDesktopServices.setUrlHandler('calibre', self.handle_calibre_url)
         set_image_allocation_limit()
         self.palette_manager.initialize()
         icon_resource_manager.initialize()
@@ -1413,10 +1415,7 @@ class Application(QApplication):
                     added_event = True
             elif qurl.isValid():
                 if qurl.scheme() == 'calibre':
-                    url = qurl.toString(QUrl.ComponentFormattingOption.FullyEncoded)
-                    with self._file_open_lock:
-                        self._file_open_paths.append(url)
-                        added_event = True
+                    self.handle_calibre_url(qurl)
             if added_event:
                 QTimer.singleShot(1000, self._send_file_open_events)
             return True
@@ -1424,6 +1423,13 @@ class Application(QApplication):
             if etype == QEvent.Type.ApplicationPaletteChange:
                 self.palette_manager.on_qt_palette_change()
             return QApplication.event(self, e)
+
+    @pyqtSlot(QUrl)
+    def handle_calibre_url(self, qurl):
+        url = qurl.toString(QUrl.ComponentFormattingOption.FullyEncoded)
+        with self._file_open_lock:
+            self._file_open_paths.append(url)
+        QTimer.singleShot(100, self._send_file_open_events)
 
     @property
     def current_custom_colors(self):
@@ -1628,7 +1634,7 @@ def ensure_app(headless=True):
             # unhandled python exception in a slot or virtual method. Since ensure_app()
             # is used in worker processes for background work like rendering html
             # or running a headless browser, we circumvent this as I really
-            # dont feel like going through all the code and making sure no
+            # don't feel like going through all the code and making sure no
             # unhandled exceptions ever occur. All the actual GUI apps already
             # override sys.excepthook with a proper error handler.
             sys.excepthook = simple_excepthook
@@ -1776,7 +1782,7 @@ def raise_and_focus(self: QWidget) -> None:
 
 def raise_without_focus(self: QWidget) -> None:
     if QApplication.instance().platformName() == 'wayland':
-        # On fucking Wayland, we cant raise a dialog without also giving it
+        # On fucking Wayland, we can't raise a dialog without also giving it
         # keyboard focus. What a joke.
         self.raise_and_focus()
     else:
