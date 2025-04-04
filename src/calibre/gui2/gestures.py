@@ -11,7 +11,7 @@ from calibre.startup import connect_lambda
 from calibre.utils.monotonic import monotonic
 from polyglot.builtins import itervalues
 
-HOLD_THRESHOLD = 1.0  # seconds
+HOLD_THRESHOLD = 0.3  # seconds
 TAP_THRESHOLD  = 50   # manhattan pixels
 
 Tap, TapAndHold, Flick = 'Tap', 'TapAndHold', 'Flick'
