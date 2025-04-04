@@ -7,7 +7,7 @@ from read_book.globals import get_boss, ltr_page_progression, ui_operations
 from read_book.settings import opts
 from read_book.viewport import get_unit_size_in_pixels, scroll_viewport
 
-HOLD_THRESHOLD = 750  # milliseconds
+HOLD_THRESHOLD = 300  # milliseconds
 TAP_THRESHOLD = 8  # pixels
 SWIPE_THRESHOLD = 8  # pixels
 TAP_LINK_THRESHOLD = 5  # pixels
