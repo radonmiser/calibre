@@ -1396,7 +1396,7 @@ class KOBOTOUCH(KOBO):
         ' Based on the existing Kobo driver by %s.') % KOBO.author
     # icon        = 'devices/kobotouch.jpg'
 
-    supported_dbversion             = 193
+    supported_dbversion             = 195
     min_supported_dbversion         = 53
     min_dbversion_series            = 65
     min_dbversion_externalid        = 65
@@ -1411,7 +1411,7 @@ class KOBOTOUCH(KOBO):
     # Starting with firmware version 3.19.x, the last number appears to be is a
     # build number. A number will be recorded here but it can be safely ignored
     # when testing the firmware version.
-    max_supported_fwversion         = (5, 7, 212781)
+    max_supported_fwversion         = (5, 8, 216841)
     # The following document firmware versions where new function or devices were added.
     # Not all are used, but this feels a good place to record it.
     min_fwversion_shelves           = (2, 0, 0)
@@ -2347,7 +2347,10 @@ class KOBOTOUCH(KOBO):
         return result
 
     def _kepubify(self, path, name, mi) -> None:
+        from calibre.ebooks.conversion.config import load_defaults
         from calibre.ebooks.oeb.polish.kepubify import kepubify_path, make_options
+        prefs = load_defaults('kepub_output')
+        prefer_justification = prefs.get('kepub_prefer_justification', False)
         debug_print(f'Starting conversion of {mi.title} ({name}) to kepub')
         opts = make_options(
             extra_css=self.extra_css or '',
@@ -2359,6 +2362,7 @@ class KOBOTOUCH(KOBO):
             hyphenation_limit_lines=self.get_pref('hyphenation_limit_lines'),
             remove_at_page_rules=self.extra_css_options.get('has_atpage', False),
             remove_widows_and_orphans=self.extra_css_options.get('has_widows_orphans', False),
+            prefer_justification=prefer_justification,
         )
         try:
             kepubify_path(path, outpath=path, opts=opts, allow_overwrite=True)
